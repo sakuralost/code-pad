@@ -145,6 +145,12 @@ class _CodeServerViewState extends State<CodeServerView> {
               });
               bar.appendChild(ctrlBtn);
 
+              function tmuxKey(k, code) {
+                // 发 Ctrl+B 前缀，然后发目标键
+                sendKey('b',{keyCode:66,ctrlKey:true});
+                setTimeout(function(){ sendKey(k,{keyCode:code}); }, 80);
+              }
+
               var keys = [
                 ['ESC',   function(){ sendKey('Escape',{keyCode:27}); }],
                 ['TAB',   function(){ sendKey('Tab',{keyCode:9,ctrlKey:false}); }],
@@ -157,6 +163,13 @@ class _CodeServerViewState extends State<CodeServerView> {
                 ['L',     function(){ sendKey('l',{keyCode:76,ctrlKey:true}); ctrlOn=false; ctrlBtn.style.background='#3a3a3a'; ctrlBtn.style.color='#ccc'; }],
                 ['|',     function(){ sendKey('|'); }],
                 ['~',     function(){ sendKey('~'); }],
+                // tmux 快捷键分隔符
+                ['─',     function(){}],
+                ['^B',    function(){ sendKey('b',{keyCode:66,ctrlKey:true}); }],
+                ['新窗',  function(){ tmuxKey('c',67); }],
+                ['下分',  function(){ tmuxKey('"',222); }],
+                ['右分',  function(){ tmuxKey('%',53); }],
+                ['上格',  function(){ sendKey('ArrowUp',{keyCode:38,ctrlKey:true,altKey:false}); }],
               ];
               keys.forEach(function(k){
                 var b = btn(k[0], k[1]);
