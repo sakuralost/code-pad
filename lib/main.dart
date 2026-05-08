@@ -35,7 +35,7 @@ class _CodeServerViewState extends State<CodeServerView> {
   bool _loading = true;
   String? _error;
 
-  static const String _serverUrl = 'http://192.168.0.99:8080';
+  static const String _serverUrl = 'http://192.168.0.99:8080/?folder=/Users/sakuralost/Library/Mobile%20Documents/com~apple~CloudDocs/heliostar/App';
 
   @override
   void initState() {
@@ -69,47 +69,105 @@ class _CodeServerViewState extends State<CodeServerView> {
         }),
         onPageFinished: (_) {
           setState(() => _loading = false);
-          _controller.runJavaScript('''
+          _controller.runJavaScript(r'''
             (function() {
-              // 1. 消除 300ms 点击延迟
-              var style = document.createElement('style');
-              style.textContent = '* { touch-action: manipulation !important; } '
-                + '.monaco-editor { will-change: transform; }';
-              document.head.appendChild(style);
+              // 1. 消除点击延迟 + Monaco GPU加速
+              var s = document.createElement('style');
+              s.textContent = '* { touch-action: manipulation !important; }'
+                + '.monaco-editor,.xterm { will-change: transform; }'
+                + '#cp-bar button:active { opacity: 0.6; }';
+              document.head.appendChild(s);
 
-              // 2. 禁止 iOS 在 input 聚焦时自动缩放（缩放会触发重排导致卡顿）
+              // 2. 禁止 iOS 聚焦时自动缩放
               var meta = document.querySelector('meta[name="viewport"]');
-              if (meta) {
-                meta.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
-              }
+              if (meta) meta.content = 'width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no';
 
-              // 3. Monaco 性能优化 + IME 修复
+              // 3. Monaco 性能优化
               function patchMonaco() {
                 if (window.monaco && window.monaco.editor) {
                   var opts = {
-                    accessibilitySupport: 'off',
-                    minimap: { enabled: false },
-                    smoothScrolling: false,
-                    cursorSmoothCaretAnimation: 'off',
-                    renderWhitespace: 'none',
-                    renderControlCharacters: false,
-                    renderLineHighlight: 'none',
-                    occurrencesHighlight: false,
-                    selectionHighlight: false,
-                    codeLens: false,
-                    folding: false,
+                    accessibilitySupport:'off', minimap:{enabled:false},
+                    smoothScrolling:false, cursorSmoothCaretAnimation:'off',
+                    renderWhitespace:'none', renderControlCharacters:false,
+                    renderLineHighlight:'none', occurrencesHighlight:false,
+                    selectionHighlight:false, codeLens:false, folding:false,
                   };
-                  window.monaco.editor.getEditors().forEach(function(e) {
-                    e.updateOptions(opts);
-                  });
-                  window.monaco.editor.onDidCreateEditor(function(e) {
-                    e.updateOptions(opts);
-                  });
-                } else {
-                  setTimeout(patchMonaco, 500);
-                }
+                  window.monaco.editor.getEditors().forEach(function(e){ e.updateOptions(opts); });
+                  window.monaco.editor.onDidCreateEditor(function(e){ e.updateOptions(opts); });
+                } else { setTimeout(patchMonaco, 500); }
               }
               patchMonaco();
+
+              // 4. 终端快捷键工具栏
+              if (document.getElementById('cp-bar')) return;
+              var ctrlOn = false;
+              var bar = document.createElement('div');
+              bar.id = 'cp-bar';
+              bar.style.cssText = [
+                'position:fixed','bottom:0','left:0','right:0','height:46px',
+                'background:#1e1e1e','border-top:1px solid #444',
+                'display:flex','align-items:center','padding:0 6px','gap:5px',
+                'z-index:99999','overflow-x:auto','-webkit-overflow-scrolling:touch',
+                'box-sizing:border-box'
+              ].join(';');
+
+              function btn(label, action) {
+                var b = document.createElement('button');
+                b.textContent = label;
+                b.style.cssText = [
+                  'min-width:44px','height:34px','border-radius:6px',
+                  'background:#3a3a3a','color:#ccc','border:none',
+                  'font-size:13px','font-family:-apple-system',
+                  'padding:0 10px','flex-shrink:0','cursor:pointer',
+                  '-webkit-tap-highlight-color:transparent','user-select:none'
+                ].join(';');
+                b.addEventListener('touchend', function(e) {
+                  e.preventDefault();
+                  action(b);
+                });
+                return b;
+              }
+
+              function sendKey(key, opts) {
+                var target = document.activeElement;
+                var ev = new KeyboardEvent('keydown', Object.assign({
+                  key:key, bubbles:true, cancelable:true
+                }, opts || {}));
+                target.dispatchEvent(ev);
+                target.dispatchEvent(new KeyboardEvent('keyup', Object.assign({key:key,bubbles:true},opts||{})));
+              }
+
+              // CTRL 锁定键
+              var ctrlBtn = btn('CTRL', function(b) {
+                ctrlOn = !ctrlOn;
+                b.style.background = ctrlOn ? '#0066cc' : '#3a3a3a';
+                b.style.color = ctrlOn ? '#fff' : '#ccc';
+              });
+              bar.appendChild(ctrlBtn);
+
+              var keys = [
+                ['ESC',   function(){ sendKey('Escape',{keyCode:27}); }],
+                ['TAB',   function(){ sendKey('Tab',{keyCode:9,ctrlKey:false}); }],
+                ['↑',     function(){ sendKey('ArrowUp',{keyCode:38,ctrlKey:ctrlOn}); ctrlOn=false; ctrlBtn.style.background='#3a3a3a'; ctrlBtn.style.color='#ccc'; }],
+                ['↓',     function(){ sendKey('ArrowDown',{keyCode:40,ctrlKey:ctrlOn}); ctrlOn=false; ctrlBtn.style.background='#3a3a3a'; ctrlBtn.style.color='#ccc'; }],
+                ['←',     function(){ sendKey('ArrowLeft',{keyCode:37,ctrlKey:ctrlOn}); ctrlOn=false; ctrlBtn.style.background='#3a3a3a'; ctrlBtn.style.color='#ccc'; }],
+                ['→',     function(){ sendKey('ArrowRight',{keyCode:39,ctrlKey:ctrlOn}); ctrlOn=false; ctrlBtn.style.background='#3a3a3a'; ctrlBtn.style.color='#ccc'; }],
+                ['C',     function(){ sendKey('c',{keyCode:67,ctrlKey:true}); ctrlOn=false; ctrlBtn.style.background='#3a3a3a'; ctrlBtn.style.color='#ccc'; }],
+                ['D',     function(){ sendKey('d',{keyCode:68,ctrlKey:true}); ctrlOn=false; ctrlBtn.style.background='#3a3a3a'; ctrlBtn.style.color='#ccc'; }],
+                ['L',     function(){ sendKey('l',{keyCode:76,ctrlKey:true}); ctrlOn=false; ctrlBtn.style.background='#3a3a3a'; ctrlBtn.style.color='#ccc'; }],
+                ['|',     function(){ sendKey('|'); }],
+                ['~',     function(){ sendKey('~'); }],
+              ];
+              keys.forEach(function(k){
+                var b = btn(k[0], k[1]);
+                // Ctrl 组合键显示蓝色前缀
+                if(['C','D','L'].indexOf(k[0])!==-1) b.title = 'Ctrl+'+k[0];
+                bar.appendChild(b);
+              });
+
+              document.body.appendChild(bar);
+              // 给终端区域留出底部空间
+              document.body.style.paddingBottom = '46px';
             })();
           ''');
         },
