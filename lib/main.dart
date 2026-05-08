@@ -34,8 +34,14 @@ class _CodeServerViewState extends State<CodeServerView> {
   late final WebViewController _controller;
   bool _loading = true;
   String? _error;
+  int _urlIndex = 0;
 
-  static const String _serverUrl = 'http://192.168.0.99:8080/?folder=/Users/sakuralost/Library/Mobile%20Documents/com~apple~CloudDocs/heliostar/App';
+  static const String _folder = '/Users/sakuralost/Library/Mobile%20Documents/com~apple~CloudDocs/heliostar/App';
+  // 按优先级排列：局域网优先，Tailscale 兜底
+  static const List<String> _urls = [
+    'http://192.168.0.99:8080/?folder=$_folder',
+    'http://100.74.91.65:8080/?folder=$_folder',
+  ];
 
   @override
   void initState() {
@@ -185,16 +191,21 @@ class _CodeServerViewState extends State<CodeServerView> {
           ''');
         },
         onWebResourceError: (error) {
-          // 只对主框架错误显示错误页，忽略子资源错误
           if (error.isForMainFrame != false) {
-            setState(() {
-              _loading = false;
-              _error = '无法连接服务器\n[${error.errorCode}] ${error.description}';
-            });
+            // 自动 failover：依次尝试下一个 URL
+            if (_urlIndex < _urls.length - 1) {
+              _urlIndex++;
+              _controller.loadRequest(Uri.parse(_urls[_urlIndex]));
+            } else {
+              setState(() {
+                _loading = false;
+                _error = '所有地址均无法连接\n请检查 WiFi 或 Tailscale\n[${error.errorCode}]';
+              });
+            }
           }
         },
       ))
-      ..loadRequest(Uri.parse(_serverUrl));
+      ..loadRequest(Uri.parse(_urls[0]));
   }
 
   @override
